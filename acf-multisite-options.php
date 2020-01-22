@@ -367,42 +367,32 @@ class Plugin
 	 */
 	public function get_metadata( $post_id = 0, $name = '', $hidden = false ) {
 
-		// vars
-		$value = null;
+		// Allow filter to short-circuit logic.
+		$null = apply_filters( "acf/pre_load_metadata", null, $post_id, $name, $hidden );
+		if( $null !== null ) {
+			return ( $null === '__return_null' ) ? null : $null;
+		}
+			
+		// Decode $post_id for $type and $id.
+		extract( acf_decode_post_id($post_id) );
+
+		// Hidden meta uses an underscore prefix.
 		$prefix = $hidden ? '_' : '';
 
-
-		// get post_id info
-		$info = acf_get_post_id_info($post_id);
-
-
-		// bail early if no $post_id (acf_form - new_post)
-		if( !$info['id'] ) return $value;
-
-
-		// option
-		if( $info['type'] === 'option' ) {
-
-			$name = $prefix . $post_id . '_' . $name;
-			$value = get_site_option( $name, null );
-
-		// meta
-		} else {
-
-			$name = $prefix . $name;
-			$meta = get_metadata( $info['type'], $info['id'], $name, false );
-
-			if( isset($meta[0]) ) {
-
-			 	$value = $meta[0];
-
-		 	}
-
+		// Bail early if no $id (possible during new acf_form).
+		if( !$id ) {
+			return null;
 		}
 
-
-		// return
-		return $value;
+		// Check option.
+		if( $type === 'option' ) {
+			return get_site_option( "{$prefix}{$id}_{$name}", null );
+			
+		// Check meta.
+		} else {
+			$meta = get_metadata( $type, $id, "{$prefix}{$name}", false );
+			return isset($meta[0]) ? $meta[0] : null;
+		}
 
 	}
 
@@ -415,36 +405,36 @@ class Plugin
 	 */
 	public function update_metadata( $post_id = 0, $name = '', $value = '', $hidden = false )
 	{
-		// vars
-		$return = false;
+		
+		// Allow filter to short-circuit logic.
+		$pre = apply_filters( "acf/pre_update_metadata", null, $post_id, $name, $value, $hidden );
+		if( $pre !== null ) {
+			return $pre;
+		}
+		
+		// Decode $post_id for $type and $id.
+		extract( acf_decode_post_id($post_id) );
+
+		// Hidden meta uses an underscore prefix.
 		$prefix = $hidden ? '_' : '';
 
-
-		// get post_id info
-		$info = acf_get_post_id_info($post_id);
-
-
-		// bail early if no $post_id (acf_form - new_post)
-		if( !$info['id'] ) return $return;
-
-
-		// option
-		if( $info['type'] === 'option' ) {
-			$name = $prefix . $post_id . '_' . $name;
-
-			$return = update_site_option( $name, $value );
-
-		// meta
-		} else {
-
-			$name = $prefix . $name;
-			$return = update_metadata( $info['type'], $info['id'], $name, $value );
-
+		// Bail early if no $id (possible during new acf_form).
+		if( !$id ) {
+			return false;
 		}
 
-
-		// return
-		return $return;
+		// Update option.
+		if( $type === 'option' ) {
+			
+			// Unslash value to match update_metadata() functionality.
+			$value = wp_unslash( $value );
+			$autoload = (bool) acf_get_setting('autoload');
+			return update_site_option( "{$prefix}{$id}_{$name}", $value, $autoload );
+			
+		// Update meta.
+		} else {
+			return update_metadata( $type, $id, "{$prefix}{$name}", $value );
+		}
 	}
 
 	/**
